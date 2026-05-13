@@ -1,0 +1,77 @@
+# ========================
+# Python
+# ========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Jupyter (if any accidentally created)
+.ipynb_checkpoints/
+
+# ========================
+# Virtual Environment
+# ========================
+venv/
+env/
+ENV/
+.venv/
+
+# ========================
+# VSCode
+# ========================
+.vscode/
+
+# ========================
+# OS Files
+# ========================
+.DS_Store
+Thumbs.db
+
+# ========================
+# Logs
+# ========================
+*.log
+
+# ========================
+# Data Files (IMPORTANT)
+# ========================
+data/*.csv
+data/*.xlsx
+
+# ========================
+# Model Files (IMPORTANT)
+# ========================
+models/*.pkl
+models/*.joblib
+
+# ========================
+# Outputs
+# ========================
+output/*.csv
+
+# ========================
+# Streamlit Cache
+# ========================
+.streamlit/
+
+# ========================
+# Temporary Files
+# ========================
+*.tmp
+*.bak
+
+# ========================
+# Environment Variables
+# ========================
+.env
+
+# ========================
+# Python Packaging
+# ========================
+build/
+dist/
+*.egg-info/
+
+models/
+output/
