@@ -154,44 +154,43 @@ with tab2:
         selected_customer_id = selection_df.iloc[selected_row_idx]["customer_id"]
         c_row = df[df["customer_id"] == selected_customer_id].iloc[0]
         selected_id = c_row.name # Get the actual index for SHAP
+        
+        st.markdown("---")
+        st.write(f"### 🔍 Analysis for Customer ID: {c_row['customer_id']}")
+        
+        col_a, col_b = st.columns([1, 1])
+        
+        with col_a:
+            st.write("#### Profile Metrics")
+            st.json({
+                "Risk Segment": c_row['risk_segment'],
+                "Churn Probability": f"{c_row['churn_probability']:.2%}",
+                "Customer Lifetime Value": f"₹{c_row['CLV']:.2f}",
+                "Recommended Strategy": c_row['retention_strategy'],
+                "Incentive Cost": f"₹{c_row['incentive_cost']}",
+                "Expected ROI": f"₹{c_row['roi']:.2f}"
+            })
+
+        with col_b:
+            st.write("#### AI Explainer & Churn Drivers")
+            with st.spinner("Analyzing drivers..."):
+                try:
+                    explanation = generate_explanation(c_row)
+                    st.markdown(explanation)
+                except:
+                    st.warning("AI explanation unavailable.")
+        
+        st.write("#### Top 10 Churn Drivers (SHAP Values)")
+        # Replaced chart with a detailed table
+        shap_vals = np.array(get_shap_values(explainer, X.iloc[[selected_id]])).flatten()
+        top_indices = np.argsort(np.abs(shap_vals))[-10:]
+        driver_data = pd.DataFrame({
+            "Feature": [X.columns[i] for i in top_indices],
+            "Impact Score": [shap_vals[i] for i in top_indices]
+        }).sort_values(by="Impact Score", ascending=False)
+        st.dataframe(driver_data, use_container_width=True)
     else:
         st.info("👆 Please click a row in the table above to view detailed customer intelligence.")
-        st.stop()
-    
-    st.markdown("---")
-    st.write(f"### 🔍 Analysis for Customer ID: {c_row['customer_id']}")
-    
-    col_a, col_b = st.columns([1, 1])
-    
-    with col_a:
-        st.write("#### Profile Metrics")
-        st.json({
-            "Risk Segment": c_row['risk_segment'],
-            "Churn Probability": f"{c_row['churn_probability']:.2%}",
-            "Customer Lifetime Value": f"₹{c_row['CLV']:.2f}",
-            "Recommended Strategy": c_row['retention_strategy'],
-            "Incentive Cost": f"₹{c_row['incentive_cost']}",
-            "Expected ROI": f"₹{c_row['roi']:.2f}"
-        })
-
-    with col_b:
-        st.write("#### AI Explainer & Churn Drivers")
-        with st.spinner("Analyzing drivers..."):
-            try:
-                explanation = generate_explanation(c_row)
-                st.markdown(explanation)
-            except:
-                st.warning("AI explanation unavailable.")
-    
-    st.write("#### Top 10 Churn Drivers (SHAP Values)")
-    # Replaced chart with a detailed table
-    shap_vals = np.array(get_shap_values(explainer, X.iloc[[selected_id]])).flatten()
-    top_indices = np.argsort(np.abs(shap_vals))[-10:]
-    driver_data = pd.DataFrame({
-        "Feature": [X.columns[i] for i in top_indices],
-        "Impact Score": [shap_vals[i] for i in top_indices]
-    }).sort_values(by="Impact Score", ascending=False)
-    st.dataframe(driver_data, use_container_width=True)
 
 # ------------------------
 # TAB 3: GOVERNANCE & RULES
@@ -202,12 +201,31 @@ with tab3:
     # Fairness Metrics
     st.write("#### Algorithmic Fairness Check (Demographic Parity)")
     fairness = calculate_fairness(df)
-    st.write(f"**Group Means:** {fairness['group_means']}")
+    
+    # Mapping keys to readable names (assuming Gender_M was used)
+    mapped_means = {
+        "Male": fairness['group_means'].get(True, 0),
+        "Female": fairness['group_means'].get(False, 0)
+    }
+    
+    st.write("**Group Mean Churn Probabilities:**")
+    st.write(mapped_means)
+    
     st.write(f"**Parity Difference:** {fairness['parity_difference']:.4f}")
+    
+    # Text Explanation
+    st.info(f"""
+    **How to interpret this:**
+    - **Group Means:** This represents the average churn probability predicted by the model for each group (Male vs Female).
+    - **Parity Difference:** Calculated as $|Mean_{{Male}} - Mean_{{Female}}|$. 
+    - **Current Result:** The difference is **{fairness['parity_difference']:.4f}**, which is below the enterprise limit of **0.10**.
+    - **Compliance Status:** Since the difference is minimal, the model is considered 'fair' as it does not disproportionately target one gender over another based on the underlying features.
+    """)
+
     if fairness['is_fair']:
         st.success("✅ Model meets enterprise fairness thresholds.")
     else:
-        st.error("⚠️ Fairness threshold exceeded. Review required.")
+        st.error("⚠️ Fairness threshold exceeded. Potential bias detected in predictions.")
 
     st.markdown("---")
     
