@@ -1,0 +1,38 @@
+{
+    "churn_definition": {
+        "logic": "Attrition_Flag == 'Attrited Customer'",
+        "description": "Customer who has closed their account or shows signs of imminent closure."
+    },
+    "risk_segmentation": {
+        "high_risk_threshold": 0.7,
+        "medium_risk_threshold": 0.3,
+        "low_risk_threshold": 0.0
+    },
+    "clv_prioritization": {
+        "high_value_threshold": 10000,
+        "medium_value_threshold": 5000,
+        "calculation": "Total_Trans_Amt * 0.2"
+    },
+    "retention_strategies": {
+        "fee_waiver": {
+            "min_clv": 5000,
+            "min_churn_prob": 0.7,
+            "cost": 1000
+        },
+        "cashback": {
+            "min_clv": 0,
+            "min_churn_prob": 0.7,
+            "cost": 500
+        },
+        "relationship_manager_call": {
+            "min_clv": 10000,
+            "min_churn_prob": 0.5,
+            "cost": 200
+        }
+    },
+    "governance": {
+        "fairness_threshold": 0.1,
+        "protected_attributes": ["Gender", "Marital_Status"],
+        "compliance_check_frequency": "Every Training Cycle"
+    }
+}

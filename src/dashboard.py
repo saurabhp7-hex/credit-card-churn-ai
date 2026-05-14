@@ -1,166 +1,221 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import joblib
+import os
+import json
 
 from preprocessing import load_data, clean_data, encode_features
+from model import add_predictions, calculate_fairness, get_shap_values
 from business import calculate_clv, revenue_at_risk
 from retention import assign_strategy, simulate_campaign
 from llm_explainer import generate_explanation
 
-
 # ========================
 # CONFIG
 # ========================
-st.set_page_config(page_title="Churn Intelligence", layout="wide")
+st.set_page_config(
+    page_title="Churn Intelligence | Enterprise Platform",
+    page_icon="💳",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-st.title("💳 Credit Card Churn & Retention Intelligence Platform")
-st.markdown("AI-powered system for identifying at-risk customers and optimizing retention strategies.")
+# Custom CSS for Premium Look
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f8f9fa;
+    }
+    .stMetric {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    </style>
+""", unsafe_allow_html=True)
 
+st.title("💳 Credit Card Churn & Retention Intelligence")
+st.markdown("---")
 
 # ========================
-# LOAD MODEL
+# LOAD RESOURCES
 # ========================
 @st.cache_resource
-def load_model():
-    return joblib.load("../models/churn_model.pkl")
+def load_resources():
+    model = joblib.load("../models/churn_model.pkl")
+    explainer = joblib.load("../models/shap_explainer.pkl")
+    return model, explainer
 
-model = load_model()
-
+try:
+    model, explainer = load_resources()
+except Exception as e:
+    st.error(f"Error loading models: {e}. Please run 'python main.py' first.")
+    st.stop()
 
 # ========================
 # PIPELINE
 # ========================
-def run_pipeline():
+def run_analysis_pipeline():
+    # Load and preprocess
     df = load_data("../data/bank_churners.csv")
-
     df = clean_data(df)
     df = encode_features(df)
-
+    
+    # Feature matrix
     X = df.drop("target", axis=1)
-
-    df["churn_probability"] = model.predict_proba(X)[:, 1]
+    
+    # Predictions & Risk Segments
+    df = add_predictions(df, model, X)
     df["customer_id"] = df.index
-
+    
+    # Business & Strategy
     df = calculate_clv(df)
     df = revenue_at_risk(df)
     df = assign_strategy(df)
     df = simulate_campaign(df)
-
-    return df
-
-
-# ========================
-# RUN BUTTON
-# ========================
-if st.button("🚀 Run Analysis"):
-    with st.spinner("Running analysis..."):
-        st.session_state["data"] = run_pipeline()
-
-    st.success("✅ Analysis Completed")
-
+    
+    return df, X
 
 # ========================
-# MAIN UI (ONLY IF DATA EXISTS)
+# SIDEBAR / APP STATE
 # ========================
-if "data" in st.session_state:
-
-    df = st.session_state["data"]
-
-    # ========================
-    # KPIs
-    # ========================
-    st.subheader("📊 Key Metrics")
-
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric("Total Customers", len(df))
-    col2.metric("High Risk Customers", len(df[df["churn_probability"] > 0.7]))
-    col3.metric("Total Revenue at Risk", int(df["revenue_at_risk"].sum()))
-
-    st.divider()
-
-    # ========================
-    # CUSTOMER LIST (BALANCED)
-    # ========================
-    st.subheader("📋 Customer List")
-
-    high_risk = df[df["churn_probability"] > 0.7].head(10)
-    low_risk = df[df["churn_probability"] < 0.3].head(10)
-
-    preview_df = pd.concat([high_risk, low_risk])
-
-    preview_df = preview_df[[
-        "customer_id",
-        "churn_probability",
-        "CLV",
-        "retention_strategy"
-    ]]
-
-    st.dataframe(preview_df, use_container_width=True)
-
-    # ========================
-    # CUSTOMER SELECTION
-    # ========================
-    st.subheader("👆 Select Customer")
-
-    selected_customer = st.radio(
-        "Choose a customer",
-        preview_df["customer_id"]
-    )
-
-    # ========================
-    # CUSTOMER DETAILS
-    # ========================
-    customer = df[df["customer_id"] == selected_customer]
-
-    st.subheader("👤 Customer Details")
-
-    st.write({
-        "Churn Probability": round(float(customer["churn_probability"].values[0]), 2),
-        "Customer Value (CLV)": round(float(customer["CLV"].values[0]), 2),
-        "Revenue at Risk": round(float(customer["revenue_at_risk"].values[0]), 2),
-        "Recommended Strategy": customer["retention_strategy"].values[0],
-        "Expected ROI": round(float(customer["roi"].values[0]), 2),
-    })
-
-    # ========================
-    # AI EXPLANATION (ONLY ONE)
-    # ========================
-    st.subheader("🧠 AI-Based Explanation")
-
-    explanation_container = st.empty()
-
-    with explanation_container.container():
-        with st.spinner("Generating explanation..."):
-            try:
-                explanation = generate_explanation(customer.iloc[0])
-            except:
-                explanation = "Unable to generate AI explanation. Showing fallback interpretation."
-
-        st.markdown(explanation)
-
-    # ========================
-    # CUSTOMER-LEVEL INSIGHT ✅
-    # ========================
-    st.subheader("📌 Customer-Level Insight")
-
-    churn_prob = float(customer["churn_probability"].values[0])
-    revenue_risk = float(customer["revenue_at_risk"].values[0])
-    strategy = customer["retention_strategy"].values[0]
-
-    if churn_prob > 0.7:
-        st.write(
-            f"This is a high-risk customer with significant revenue exposure of ₹{int(revenue_risk)}. "
-            f"Immediate action such as '{strategy}' is recommended to prevent churn."
-        )
-
-    elif churn_prob > 0.3:
-        st.write(
-            f"This customer shows moderate churn risk with potential revenue impact of ₹{int(revenue_risk)}. "
-            f"Proactive engagement can improve retention."
-        )
-
+if "data" not in st.session_state:
+    if st.sidebar.button("🚀 Initialize Platform"):
+        with st.spinner("Processing customer data..."):
+            df_final, X_matrix = run_analysis_pipeline()
+            st.session_state["data"] = df_final
+            st.session_state["X"] = X_matrix
+            st.rerun()
     else:
-        st.write(
-            "This customer is stable with low churn risk and no immediate action is required."
-        )
+        st.info("👈 Please initialize the platform from the sidebar to begin analysis.")
+        st.stop()
+
+df = st.session_state["data"]
+X = st.session_state["X"]
+
+# ========================
+# TABS
+# ========================
+tab1, tab2, tab3 = st.tabs([
+    "📊 Executive Summary", 
+    "👤 Customer Details", 
+    "⚖️ Governance & Rules"
+])
+
+# ------------------------
+# TAB 1: EXECUTIVE SUMMARY
+# ------------------------
+with tab1:
+    st.subheader("Key Portfolio Metrics")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    total_customers = len(df)
+    high_risk_count = len(df[df["risk_segment"] == "High Risk"])
+    total_rev_at_risk = df["revenue_at_risk"].sum()
+    avg_churn_prob = df["churn_probability"].mean()
+    
+    col1.metric("Total Customers", f"{total_customers:,}")
+    col2.metric("High Risk Population", f"{high_risk_count:,}")
+    col3.metric("Revenue at Risk", f"₹{int(total_rev_at_risk):,}")
+    col4.metric("Avg Churn Prob", f"{avg_churn_prob:.1%}")
+    
+    st.markdown("### Risk Segment Breakdown")
+    # Using simple Streamlit table instead of charts
+    risk_summary = df['risk_segment'].value_counts().reset_index()
+    risk_summary.columns = ['Risk Segment', 'Customer Count']
+    st.table(risk_summary)
+
+# ------------------------
+# TAB 2: CUSTOMER DETAILS
+# ------------------------
+with tab2:
+    st.subheader("Customer Intelligence Workspace")
+    
+    # Selection Table
+    st.write("#### 📋 Select a Customer from the List")
+    selection_df = df[[
+        "customer_id", "risk_segment", "churn_probability", "CLV", "retention_strategy"
+    ]].head(100) # Showing top 100 for performance
+    
+    # Using st.dataframe with selection mode if available, or simple selection index
+    event = st.dataframe(
+        selection_df,
+        use_container_width=True,
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="single-row"
+    )
+    
+    selected_indices = event.selection.rows
+    if selected_indices:
+        selected_row_idx = selected_indices[0]
+        selected_customer_id = selection_df.iloc[selected_row_idx]["customer_id"]
+        c_row = df[df["customer_id"] == selected_customer_id].iloc[0]
+        selected_id = c_row.name # Get the actual index for SHAP
+    else:
+        st.info("👆 Please click a row in the table above to view detailed customer intelligence.")
+        st.stop()
+    
+    st.markdown("---")
+    st.write(f"### 🔍 Analysis for Customer ID: {c_row['customer_id']}")
+    
+    col_a, col_b = st.columns([1, 1])
+    
+    with col_a:
+        st.write("#### Profile Metrics")
+        st.json({
+            "Risk Segment": c_row['risk_segment'],
+            "Churn Probability": f"{c_row['churn_probability']:.2%}",
+            "Customer Lifetime Value": f"₹{c_row['CLV']:.2f}",
+            "Recommended Strategy": c_row['retention_strategy'],
+            "Incentive Cost": f"₹{c_row['incentive_cost']}",
+            "Expected ROI": f"₹{c_row['roi']:.2f}"
+        })
+
+    with col_b:
+        st.write("#### AI Explainer & Churn Drivers")
+        with st.spinner("Analyzing drivers..."):
+            try:
+                explanation = generate_explanation(c_row)
+                st.markdown(explanation)
+            except:
+                st.warning("AI explanation unavailable.")
+    
+    st.write("#### Top 10 Churn Drivers (SHAP Values)")
+    # Replaced chart with a detailed table
+    shap_vals = np.array(get_shap_values(explainer, X.iloc[[selected_id]])).flatten()
+    top_indices = np.argsort(np.abs(shap_vals))[-10:]
+    driver_data = pd.DataFrame({
+        "Feature": [X.columns[i] for i in top_indices],
+        "Impact Score": [shap_vals[i] for i in top_indices]
+    }).sort_values(by="Impact Score", ascending=False)
+    st.dataframe(driver_data, use_container_width=True)
+
+# ------------------------
+# TAB 3: GOVERNANCE & RULES
+# ------------------------
+with tab3:
+    st.subheader("System Governance & Enterprise Rules")
+    
+    # Fairness Metrics
+    st.write("#### Algorithmic Fairness Check (Demographic Parity)")
+    fairness = calculate_fairness(df)
+    st.write(f"**Group Means:** {fairness['group_means']}")
+    st.write(f"**Parity Difference:** {fairness['parity_difference']:.4f}")
+    if fairness['is_fair']:
+        st.success("✅ Model meets enterprise fairness thresholds.")
+    else:
+        st.error("⚠️ Fairness threshold exceeded. Review required.")
+
+    st.markdown("---")
+    
+    # Rule Book
+    st.write("#### Centralized Rule Book (data/rules.json)")
+    if os.path.exists("../data/rules.json"):
+        with open("../data/rules.json", 'r') as f:
+            rules_data = json.load(f)
+        st.json(rules_data)
+    else:
+        st.warning("Rule book file not found.")

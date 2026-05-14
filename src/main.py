@@ -3,6 +3,7 @@ from model import train_model, evaluate_model, add_predictions
 from business import calculate_clv, revenue_at_risk
 from retention import assign_strategy, simulate_campaign
 from model import save_model
+import joblib
 
 def main():
     # Step 1: Load data
@@ -13,10 +14,11 @@ def main():
     df = encode_features(df)
 
     # Step 3: Train model
-    model, X_test, y_test, X = train_model(df)
+    model, X_test, y_test, X, explainer = train_model(df)
     evaluate_model(model, X_test, y_test)
 
     save_model(model)
+    joblib.dump(explainer, "../models/shap_explainer.pkl")
 
     # Step 4: Predictions
     df = add_predictions(df, model, X)
@@ -29,8 +31,12 @@ def main():
     df = assign_strategy(df)
     df = simulate_campaign(df)
 
-    print(df[['churn_probability', 'CLV', 'revenue_at_risk', 'retention_strategy', 'roi']].head())
+    print(df[['churn_probability', 'risk_segment', 'CLV', 'revenue_at_risk', 'retention_strategy', 'roi']].head())
     df.to_csv("../output/results.csv", index=False)
+    
+    # Save a reference copy for drift detection
+    df.to_csv("../data/reference_data.csv", index=False)
+    
     print("✅ Results saved to output/results.csv")
 
 
