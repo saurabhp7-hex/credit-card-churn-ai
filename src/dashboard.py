@@ -6,7 +6,7 @@ from preprocessing import load_data, clean_data, encode_features
 from business import calculate_clv, revenue_at_risk
 from retention import assign_strategy, simulate_campaign
 
-
+from llm_explainer import generate_explanation
 # ========================
 # CONFIG
 # ========================
@@ -196,3 +196,19 @@ if "data" in st.session_state:
     st.write(
         f"{len(high_risk)} high-risk customers identified contributing ₹{int(high_risk['revenue_at_risk'].sum())} revenue at risk."
     )
+
+
+    st.subheader("🧠 AI-Based Explanation")
+
+    
+# Create placeholder
+    explanation_container = st.empty()
+
+    with explanation_container.container():
+        with st.spinner("Generating explanation..."):
+            try:
+                explanation = generate_explanation(customer.iloc[0])
+            except:
+                explanation = "Fallback: Customer shows moderate behavioral signals."
+
+        st.write(explanation)
