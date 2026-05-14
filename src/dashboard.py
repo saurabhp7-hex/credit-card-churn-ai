@@ -86,12 +86,22 @@ if "data" in st.session_state:
     # ========================
     st.subheader("📋 Customer List")
 
-    preview_df = df[[
+    # High risk customers
+    high_risk = df[df["churn_probability"] > 0.7].head(10)
+
+    # Low risk customers
+    low_risk = df[df["churn_probability"] < 0.3].head(10)
+
+    # Combine
+    preview_df = pd.concat([high_risk, low_risk])
+
+    # Select required columns
+    preview_df = preview_df[[
         "customer_id",
         "churn_probability",
         "CLV",
         "retention_strategy"
-    ]].sort_values(by="churn_probability", ascending=False).head(20)
+    ]]
 
     st.dataframe(preview_df, use_container_width=True)
 
@@ -123,33 +133,62 @@ if "data" in st.session_state:
     # ========================
     # EXPLANATION
     # ========================
-    st.subheader("🧠 Why is this customer at risk?")
+    st.subheader("🧠 Customer Behavior Explanation")
+
+    churn_prob = float(customer["churn_probability"].values[0])
 
     explanation_points = []
 
-    if customer["Months_Inactive_12_mon"].values[0] > 3:
-        explanation_points.append("Customer has been inactive for multiple months")
+    # ========================
+    # HIGH RISK
+    # ========================
+    if churn_prob > 0.7:
 
-    if customer["Total_Trans_Ct"].values[0] < 40:
-        explanation_points.append("Low transaction activity")
+        if customer["Months_Inactive_12_mon"].values[0] > 3:
+            explanation_points.append("Customer has been inactive for multiple months")
 
-    if customer["Avg_Utilization_Ratio"].values[0] < 0.3:
-        explanation_points.append("Low credit utilization")
+        if customer["Total_Trans_Ct"].values[0] < 40:
+            explanation_points.append("Low transaction activity observed")
 
-    if customer["Total_Amt_Chng_Q4_Q1"].values[0] < 1:
-        explanation_points.append("Declining spending trend")
+        if customer["Total_Amt_Chng_Q4_Q1"].values[0] < 1:
+            explanation_points.append("Spending trend is declining")
 
-    if len(explanation_points) == 0:
-        explanation_points.append("Moderate behavioral signals observed")
+        st.markdown("### ⚠️ High Churn Risk Drivers")
 
+    # ========================
+    # LOW RISK
+    # ========================
+    elif churn_prob < 0.3:
+
+        if customer["Total_Trans_Ct"].values[0] > 60:
+            explanation_points.append("Customer shows strong transaction activity")
+
+        if customer["Avg_Utilization_Ratio"].values[0] > 0.5:
+            explanation_points.append("Healthy credit utilization")
+
+        if customer["Months_Inactive_12_mon"].values[0] <= 2:
+            explanation_points.append("Customer is actively engaged")
+
+        st.markdown("### ✅ Customer Retention Indicators")
+
+    # ========================
+    # MEDIUM RISK
+    # ========================
+    else:
+
+        explanation_points.append("Customer shows moderate engagement and usage patterns")
+        st.markdown("### ⚠️ Moderate Risk Indicators")
+
+# ========================
+# DISPLAY OUTPUT
+# ========================
     for point in explanation_points:
         st.write(f"• {point}")
 
-    st.info("Explanation is derived from behavioral patterns used by the ML model.")
-
-    # ========================
-    # INSIGHT
-    # ========================
+    st.info("Explanation is aligned with predicted churn behavior.")
+        # ========================
+        # INSIGHT
+        # ========================
     st.subheader("📌 Key Insight")
 
     high_risk = df[df["churn_probability"] > 0.7]
