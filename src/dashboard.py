@@ -2,20 +2,22 @@ import streamlit as st
 import pandas as pd
 import joblib
 
-# Import your modules (NO training here)
 from preprocessing import load_data, clean_data, encode_features
 from business import calculate_clv, revenue_at_risk
 from retention import assign_strategy, simulate_campaign
 
+
 # ========================
-# PAGE CONFIG
+# CONFIG
 # ========================
-st.set_page_config(page_title="Churn Intelligence Dashboard", layout="wide")
+st.set_page_config(page_title="Churn Intelligence", layout="wide")
 
 st.title("💳 Credit Card Churn & Retention Intelligence Platform")
+st.markdown("Simple decision dashboard for customer churn analysis.")
+
 
 # ========================
-# LOAD MODEL (CACHED)
+# LOAD MODEL
 # ========================
 @st.cache_resource
 def load_model():
@@ -23,27 +25,26 @@ def load_model():
 
 model = load_model()
 
+
 # ========================
-# PIPELINE FUNCTION (FAST)
+# PIPELINE
 # ========================
-@st.cache_data
 def run_pipeline():
-    # Step 1: Load data
     df = load_data("../data/bank_churners.csv")
 
-    # Step 2: Clean + preprocess
     df = clean_data(df)
     df = encode_features(df)
 
-    # Step 3: Predict (NO TRAINING HERE)
-    X = df.drop('target', axis=1)
-    df['churn_probability'] = model.predict_proba(X)[:, 1]
+    X = df.drop("target", axis=1)
 
-    # Step 4: Business logic
+    # Prediction
+    df["churn_probability"] = model.predict_proba(X)[:, 1]
+
+    df["customer_id"] = df.index
+
+    # Business logic
     df = calculate_clv(df)
     df = revenue_at_risk(df)
-
-    # Step 5: Retention engine
     df = assign_strategy(df)
     df = simulate_campaign(df)
 
@@ -53,84 +54,106 @@ def run_pipeline():
 # ========================
 # RUN BUTTON
 # ========================
-if st.button("🚀 Run Churn Analysis"):
+if st.button("🚀 Run Analysis"):
+    with st.spinner("Running analysis..."):
+        st.session_state["data"] = run_pipeline()
 
-    with st.spinner("Running AI pipeline..."):
+    st.success("✅ Analysis Completed")
 
-        df = run_pipeline()
 
-    st.success("✅ Analysis Completed!")
+# ========================
+# SHOW DATA IF EXISTS
+# ========================
+if "data" in st.session_state:
+
+    df = st.session_state["data"]
 
     # ========================
     # KPIs
     # ========================
     st.subheader("📊 Key Metrics")
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
 
     col1.metric("Total Customers", len(df))
-    col2.metric("Avg Churn Probability", round(df['churn_probability'].mean(), 2))
-    col3.metric("Revenue at Risk", int(df['revenue_at_risk'].sum()))
-    col4.metric("Total ROI", int(df['roi'].sum()))
+    col2.metric("High Risk Customers", len(df[df["churn_probability"] > 0.7]))
+    col3.metric("Total Revenue at Risk", int(df["revenue_at_risk"].sum()))
 
     st.divider()
 
     # ========================
-    # CHURN DISTRIBUTION
+    # CUSTOMER LIST
     # ========================
-    st.subheader("📉 Churn Probability Distribution")
-    st.bar_chart(df['churn_probability'])
+    st.subheader("📋 Customer List")
 
-    # ========================
-    # FILTER
-    # ========================
-    st.subheader("🔍 Filter Customers")
+    preview_df = df[[
+        "customer_id",
+        "churn_probability",
+        "CLV",
+        "retention_strategy"
+    ]].sort_values(by="churn_probability", ascending=False).head(20)
 
-    risk_range = st.slider("Select Churn Probability Range", 0.0, 1.0, (0.5, 1.0))
-
-    filtered_df = df[
-        (df['churn_probability'] >= risk_range[0]) &
-        (df['churn_probability'] <= risk_range[1])
-    ]
-
-    st.write(filtered_df.head(20))
+    st.dataframe(preview_df, use_container_width=True)
 
     # ========================
-    # STRATEGY ANALYSIS
+    # SELECT CUSTOMER
     # ========================
-    st.subheader("🎯 Retention Strategy Distribution")
-    st.bar_chart(df['retention_strategy'].value_counts())
+    st.subheader("👆 Select Customer")
+
+    selected_customer = st.radio(
+        "Choose a customer",
+        preview_df["customer_id"]
+    )
 
     # ========================
-    # ROI DISTRIBUTION
+    # CUSTOMER DETAILS
     # ========================
-    st.subheader("💰 ROI Analysis")
-    st.bar_chart(df['roi'])
+    customer = df[df["customer_id"] == selected_customer]
 
-    # ========================
-    # HIGH RISK CUSTOMERS
-    # ========================
-    st.subheader("⚠️ High Risk Customers")
+    st.subheader("👤 Customer Details")
 
-    high_risk = df[df['churn_probability'] > 0.7]
-
-    st.write(high_risk[['churn_probability', 'CLV', 'retention_strategy']].head(10))
-
-    # ========================
-    # TOP REVENUE RISK
-    # ========================
-    st.subheader("🏆 Top Revenue-at-Risk Customers")
-
-    top_customers = df.sort_values(by="revenue_at_risk", ascending=False).head(10)
-
-    st.write(top_customers[['churn_probability', 'CLV', 'revenue_at_risk', 'retention_strategy']])
+    st.write({
+    "Churn Probability": round(float(customer["churn_probability"].values[0]), 2),
+    "Customer Value (CLV)": round(float(customer["CLV"].values[0]), 2),
+    "Revenue at Risk": round(float(customer["revenue_at_risk"].values[0]), 2),
+    "Recommended Strategy": customer["retention_strategy"].values[0],
+    "Expected ROI": round(float(customer["roi"].values[0]), 2),
+    })
 
     # ========================
-    # BUSINESS INSIGHT
+    # EXPLANATION
     # ========================
-    st.subheader("🧠 Key Business Insight")
+    st.subheader("🧠 Why is this customer at risk?")
 
-    st.info(
-        f"High-risk customers (>0.7 churn probability) contribute ₹{int(high_risk['revenue_at_risk'].sum())} "
-        "in potential revenue loss. Targeted retention strategies can significantly improve ROI."
+    explanation_points = []
+
+    if customer["Months_Inactive_12_mon"].values[0] > 3:
+        explanation_points.append("Customer has been inactive for multiple months")
+
+    if customer["Total_Trans_Ct"].values[0] < 40:
+        explanation_points.append("Low transaction activity")
+
+    if customer["Avg_Utilization_Ratio"].values[0] < 0.3:
+        explanation_points.append("Low credit utilization")
+
+    if customer["Total_Amt_Chng_Q4_Q1"].values[0] < 1:
+        explanation_points.append("Declining spending trend")
+
+    if len(explanation_points) == 0:
+        explanation_points.append("Moderate behavioral signals observed")
+
+    for point in explanation_points:
+        st.write(f"• {point}")
+
+    st.info("Explanation is derived from behavioral patterns used by the ML model.")
+
+    # ========================
+    # INSIGHT
+    # ========================
+    st.subheader("📌 Key Insight")
+
+    high_risk = df[df["churn_probability"] > 0.7]
+
+    st.write(
+        f"{len(high_risk)} high-risk customers identified contributing ₹{int(high_risk['revenue_at_risk'].sum())} revenue at risk."
     )
