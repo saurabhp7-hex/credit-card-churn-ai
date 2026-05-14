@@ -181,14 +181,42 @@ with tab2:
                     st.warning("AI explanation unavailable.")
         
         st.write("#### Top 10 Churn Drivers (SHAP Values)")
+        
+        with st.expander("ℹ️ How is the Impact Score calculated?"):
+            st.write("""
+            **SHAP (SHapley Additive exPlanations)** uses cooperative game theory to quantify the contribution of each feature to the final prediction.
+            
+            - **Positive Score**: The feature is increasing the churn probability (pushing the customer towards leaving).
+            - **Negative Score**: The feature is decreasing the churn probability (pushing the customer towards staying).
+            - **Magnitude**: The larger the absolute value, the stronger the influence of that feature on the specific customer's result.
+            """)
+            
+        # Feature description mapping
+        feature_desc = {
+            "Transaction_Velocity": "Spending frequency relative to tenure. Higher velocity usually indicates active usage.",
+            "Avg_Transaction_Amt": "The average value of each transaction. Decreasing trends may signal churn.",
+            "Engagement_Score": "Composite metric of product relationships vs inactivity. Lower scores indicate disengagement.",
+            "Financial_Change_Velocity": "Rate of change in spending behavior (Q4 vs Q1). High volatility is a churn signal.",
+            "Credit_Utilization_Ratio": "Percentage of credit limit being used. Extremely low usage often precedes churn.",
+            "Total_Trans_Ct": "Count of transactions in 12 months. A decline is the strongest indicator of churn.",
+            "Total_Relationship_Count": "Number of bank products. More products increase customer 'stickiness'.",
+            "Months_Inactive_12_mon": "Period of no spending. High inactivity is a direct churn driver.",
+            "Contacts_Count_12_mon": "Frequency of bank interactions. Frequent support calls can signal dissatisfaction.",
+            "Total_Ct_Chng_Q4_Q1": "Change in transaction counts. A ratio < 1 indicates declining activity.",
+            "Avg_Utilization_Ratio": "Overall card usage. Dropping to zero is a major red flag."
+        }
+
         # Replaced chart with a detailed table
         shap_vals = np.array(get_shap_values(explainer, X.iloc[[selected_id]])).flatten()
         top_indices = np.argsort(np.abs(shap_vals))[-10:]
+        
         driver_data = pd.DataFrame({
-            "Feature": [X.columns[i] for i in top_indices],
-            "Impact Score": [shap_vals[i] for i in top_indices]
+            "Parameter": [X.columns[i] for i in top_indices],
+            "Impact Score": [shap_vals[i] for i in top_indices],
+            "Business Context": [feature_desc.get(X.columns[i], "Standard behavioral metric influencing risk.") for i in top_indices]
         }).sort_values(by="Impact Score", ascending=False)
-        st.dataframe(driver_data, use_container_width=True)
+        
+        st.dataframe(driver_data, use_container_width=True, hide_index=True)
     else:
         st.info("👆 Please click a row in the table above to view detailed customer intelligence.")
 
