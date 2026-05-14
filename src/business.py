@@ -5,5 +5,13 @@ def calculate_clv(df):
 
 
 def revenue_at_risk(df):
-    df['revenue_at_risk'] = df['CLV'] * df['churn_probability']
+
+    def calculate_risk(row):
+        if row["churn_probability"] > 0.7:
+            return row["CLV"] * row["churn_probability"]
+        else:
+            return 0
+
+    df['revenue_at_risk'] = df.apply(calculate_risk, axis=1)
+
     return df

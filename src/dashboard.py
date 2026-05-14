@@ -140,14 +140,27 @@ if "data" in st.session_state:
         st.markdown(explanation)
 
     # ========================
-    # KEY BUSINESS INSIGHT
+    # CUSTOMER-LEVEL INSIGHT ✅
     # ========================
-    st.subheader("📌 Key Insight")
+    st.subheader("📌 Customer-Level Insight")
 
-    high_risk_full = df[df["churn_probability"] > 0.7]
+    churn_prob = float(customer["churn_probability"].values[0])
+    revenue_risk = float(customer["revenue_at_risk"].values[0])
+    strategy = customer["retention_strategy"].values[0]
 
-    st.write(
-        f"{len(high_risk_full)} high-risk customers identified contributing "
-        f"₹{int(high_risk_full['revenue_at_risk'].sum())} revenue at risk. "
-        "Focused retention strategies can significantly reduce potential loss."
-    )
+    if churn_prob > 0.7:
+        st.write(
+            f"This is a high-risk customer with significant revenue exposure of ₹{int(revenue_risk)}. "
+            f"Immediate action such as '{strategy}' is recommended to prevent churn."
+        )
+
+    elif churn_prob > 0.3:
+        st.write(
+            f"This customer shows moderate churn risk with potential revenue impact of ₹{int(revenue_risk)}. "
+            f"Proactive engagement can improve retention."
+        )
+
+    else:
+        st.write(
+            "This customer is stable with low churn risk and no immediate action is required."
+        )
