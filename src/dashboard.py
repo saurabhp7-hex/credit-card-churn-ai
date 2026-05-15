@@ -135,9 +135,14 @@ with tab2:
     
     # Selection Table
     st.write("#### 📋 Select a Customer from the List")
-    selection_df = df[[
+    # Balanced 20-20-20 sample for presentation in the selection list
+    selection_df = pd.concat([
+        df[df["risk_segment"] == "Low Risk"].head(20),
+        df[df["risk_segment"] == "Medium Risk"].head(20),
+        df[df["risk_segment"] == "High Risk"].head(20)
+    ])[[
         "customer_id", "risk_segment", "churn_probability", "CLV", "retention_strategy"
-    ]].head(100) # Showing top 100 for performance
+    ]]
     
     # Using st.dataframe with selection mode if available, or simple selection index
     event = st.dataframe(
