@@ -7,6 +7,12 @@ import numpy as np
 import pandas as pd
 
 def train_model(df):
+    """
+    Trains a Random Forest Classifier on the provided dataframe.
+    - Splits data into training and testing sets.
+    - Initializes and fits the model.
+    - Creates a SHAP TreeExplainer for model interpretability.
+    """
     X = df.drop('target', axis=1)
     y = df['target']
 
@@ -24,6 +30,9 @@ def train_model(df):
 
 
 def get_risk_segment(probability):
+    """
+    Categorizes churn probability into risk segments: High, Medium, or Low.
+    """
     if probability > 0.7:
         return "High Risk"
     elif probability > 0.3:
@@ -33,6 +42,9 @@ def get_risk_segment(probability):
 
 
 def evaluate_model(model, X_test, y_test):
+    """
+    Evaluates model performance using classification report and ROC-AUC score.
+    """
     y_pred = model.predict(X_test)
     y_prob = model.predict_proba(X_test)[:, 1]
 
@@ -41,6 +53,10 @@ def evaluate_model(model, X_test, y_test):
 
 
 def add_predictions(df, model, X):
+    """
+    Applies the model to the feature matrix X and adds 'churn_probability' 
+    and 'risk_segment' columns to the dataframe.
+    """
     df['churn_probability'] = model.predict_proba(X)[:, 1]
     df['risk_segment'] = df['churn_probability'].apply(get_risk_segment)
     return df
@@ -68,6 +84,10 @@ def calculate_fairness(df, protected_col='Gender_M'):
 
 
 def get_shap_values(explainer, X_row):
+    """
+    Calculates SHAP values for a given row to explain individual predictions.
+    Extracts values specifically for the positive class (churn).
+    """
     shap_values = explainer.shap_values(X_row)
     # For RandomForest in SHAP, shap_values is a list for each class. 
     # Class 1 is index 1.
@@ -76,4 +96,7 @@ def get_shap_values(explainer, X_row):
     return shap_values
 
 def save_model(model):
+    """
+    Serializes and saves the trained model to the models directory.
+    """
     joblib.dump(model, "../models/churn_model.pkl")
