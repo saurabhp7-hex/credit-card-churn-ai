@@ -1,18 +1,18 @@
-import os
-from dotenv import load_dotenv
-from openai import AzureOpenAI
+import os # OS module for accessing environment variables
+from dotenv import load_dotenv # Load variables from .env file
+from openai import AzureOpenAI # Azure OpenAI client for LLM interaction
 
-# Load environment variables
+# Initialize environment configuration
 load_dotenv()
 
-# Read from .env
+# Extract Azure OpenAI configuration from environment
 api_key = os.getenv("AZURE_OPENAI_API_KEY")
 api_version = os.getenv("AZURE_API_VERSION")
 endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
 model_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
 
 
-# Create client
+# Initialize the Azure OpenAI client with security credentials
 client = AzureOpenAI(
     api_key=api_key,
     api_version=api_version,
@@ -20,8 +20,14 @@ client = AzureOpenAI(
 )
 
 
-def generate_explanation(customer_row):
+def generate_explanation(customer_row): # Function to generate narrative insights for a specific customer
+    """
+    Constructs a prompt for the LLM using specific customer data points
+    (Churn probability, activity levels, and utilization).
+    The model generates a human-readable explanation of why the customer is at risk.
+    """
 
+    # Dynamic prompt construction with customer context
     prompt = f"""
     You are a banking AI assistant.
 
@@ -59,9 +65,11 @@ def generate_explanation(customer_row):
     <one short line>
     """
 
+    # Call the LLM to generate the narrative summary
     response = client.chat.completions.create(
         model=model_name,
         messages=[{"role": "user", "content": prompt}]
     )
 
+    # Return the text-based response from the AI assistant
     return response.choices[0].message.content
